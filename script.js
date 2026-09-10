@@ -912,7 +912,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatTime(s) { return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`; }
     function parseTimeToSeconds(timeStr) { const p = timeStr.match(/^(\d+):(\d{2})$/); return p ? parseInt(p[1], 10)*60 + parseInt(p[2], 10) : null; }
     
-    initialize();
+    
 });
 // Ensure gas display shows 100% at start
 try { document.getElementById('gas-value-display').textContent = '100 %'; } catch(e){}
@@ -920,20 +920,17 @@ try { document.getElementById('gas-value-display').textContent = '100 %'; } catc
     // --- NUEVO CÓDIGO: GUARDAR Y CARGAR DESDE GOOGLE SHEETS ---
     const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbxWy3FIVcqhV4-yfS2EPCXgV-T_XSBnVFt3GCmO1hJfjTQh9macTesB7aomkR3EE227JQ/exec";
 
-    // GUARDAR EN LA NUBE
+    // 1. GUARDAR EN LA NUBE
     const saveCloudBtn = document.getElementById('save-cloud-btn');
     if (saveCloudBtn) {
         saveCloudBtn.addEventListener('click', () => {
             const s = state.samples[state.currentSample];
-            
-            // Calculamos los datos que normalmente van al informe
             const devTime = (s.events.crack && s.events.end) ? s.events.end.time - s.events.crack.time : 0;
             const filteredData = s.data.filter(d => d.temp !== null && !d.adjustment);
             const totalTime = s.events.end ? s.events.end.time : (filteredData.length > 0 ? filteredData[filteredData.length - 1].time : 0);
             const dtr = totalTime > 0 && devTime > 0 ? (devTime / totalTime * 100).toFixed(1) : '0.0';
             const loss = (s.info.greenWeight && s.info.roastedWeight) ? ((s.info.greenWeight - s.info.roastedWeight) / s.info.greenWeight * 100).toFixed(2) : '0.00';
 
-            // Empaquetamos todo para enviarlo
             const payload = {
                 sampleId: state.currentSample,
                 info: s.info,
@@ -973,24 +970,16 @@ try { document.getElementById('gas-value-display').textContent = '100 %'; } catc
         });
     }
 
-
-
-    initialize();
-});
-// Ensure gas display shows 100% at start
-try { document.getElementById('gas-value-display').textContent = '100 %'; } catch(e){}
-
-    // ELEMENTOS DEL MODAL DE LA NUBE
+    // 2. MODAL Y CARGA DESDE LA NUBE
     const cloudModal = document.getElementById('cloud-load-modal');
     const closeCloudModalBtn = document.getElementById('close-cloud-modal');
     const cloudLoadBody = document.getElementById('cloud-load-body');
+    const loadCloudBtn = document.getElementById('load-cloud-btn');
 
     if (closeCloudModalBtn) {
         closeCloudModalBtn.addEventListener('click', () => cloudModal.classList.remove('visible'));
     }
 
-    // CARGAR DESDE LA NUBE (Mostrar lista)
-    const loadCloudBtn = document.getElementById('load-cloud-btn');
     if (loadCloudBtn) {
         loadCloudBtn.addEventListener('click', () => {
             cloudModal.classList.add('visible');
@@ -1000,27 +989,27 @@ try { document.getElementById('gas-value-display').textContent = '100 %'; } catc
             .then(response => response.json())
             .then(data => {
                 if (data.status === "éxito") {
-                    if (data.list.length === 0) {
+                    if (!data.list || data.list.length === 0) {
                         cloudLoadBody.innerHTML = '<p>No hay tuestes guardados en la nube aún.</p>';
                         return;
                     }
 
                     let tableHTML = '<table class="report-table" style="width: 100%;">';
-                    tableHTML += '<thead><tr><th>Fecha</th><th>Muestra</th><th>Productor</th><th>Variedad</th><th>Acción</th></tr></thead><tbody>';
+                    tableHTML += '<thead><tr><th>Fila</th><th>Fecha</th><th>Muestra</th><th>Productor</th><th>Variedad</th><th>Acción</th></tr></thead><tbody>';
                     
                     data.list.forEach(item => {
                         tableHTML += `<tr>
+                            <td style="text-align:center;">${item.row}</td>
                             <td style="text-align:center;">${item.date}</td>
                             <td style="text-align:center;"><b>${item.sampleId}</b></td>
                             <td style="text-align:center;">${item.producer || '-'}</td>
                             <td style="text-align:center;">${item.variety || '-'}</td>
-                            <td style="text-align:center;"><button class="load-specific-row-btn" data-row="${item.row}" style="background-color: var(--color-a); color: white; padding: 6px 12px; cursor: pointer; border-radius: 4px; border:none;">Descargar Perfil</button></td>
+                            <td style="text-align:center;"><button class="load-specific-row-btn" data-row="${item.row}" style="background-color: var(--color-a); color: white; padding: 6px 12px; cursor: pointer; border-radius: 4px; border:none;">Descargar</button></td>
                         </tr>`;
                     });
                     tableHTML += '</tbody></table>';
                     cloudLoadBody.innerHTML = tableHTML;
 
-                    // Asignar eventos a los botones de descarga
                     document.querySelectorAll('.load-specific-row-btn').forEach(btn => {
                         btn.addEventListener('click', (e) => {
                             const rowToLoad = e.target.getAttribute('data-row');
@@ -1073,3 +1062,8 @@ try { document.getElementById('gas-value-display').textContent = '100 %'; } catc
         });
     }
     // --- FIN DEL NUEVO CÓDIGO ---
+
+    initialize();
+});
+// Ensure gas display shows 100% at start
+try { document.getElementById('gas-value-display').textContent = '100 %'; } catch(e){}
