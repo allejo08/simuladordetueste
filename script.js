@@ -912,28 +912,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatTime(s) { return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`; }
     function parseTimeToSeconds(timeStr) { const p = timeStr.match(/^(\d+):(\d{2})$/); return p ? parseInt(p[1], 10)*60 + parseInt(p[2], 10) : null; }
     
-    initialize();
-});
-// Ensure gas display shows 100% at start
-try { document.getElementById('gas-value-display').textContent = '100 %'; } catch(e){}
 
-    // --- NUEVO CÓDIGO: GUARDAR Y CARGAR DESDE GOOGLE SHEETS ---
+    // --- INTEGRACIÓN GOOGLE SHEETS (GUARDAR Y CARGAR) ---
     const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbxWy3FIVcqhV4-yfS2EPCXgV-T_XSBnVFt3GCmO1hJfjTQh9macTesB7aomkR3EE227JQ/exec";
 
-    // GUARDAR EN LA NUBE
+    // 1. Guardar muestra actual en la nube
     const saveCloudBtn = document.getElementById('save-cloud-btn');
     if (saveCloudBtn) {
         saveCloudBtn.addEventListener('click', () => {
             const s = state.samples[state.currentSample];
-            
-            // Calculamos los datos que normalmente van al informe
             const devTime = (s.events.crack && s.events.end) ? s.events.end.time - s.events.crack.time : 0;
             const filteredData = s.data.filter(d => d.temp !== null && !d.adjustment);
             const totalTime = s.events.end ? s.events.end.time : (filteredData.length > 0 ? filteredData[filteredData.length - 1].time : 0);
             const dtr = totalTime > 0 && devTime > 0 ? (devTime / totalTime * 100).toFixed(1) : '0.0';
             const loss = (s.info.greenWeight && s.info.roastedWeight) ? ((s.info.greenWeight - s.info.roastedWeight) / s.info.greenWeight * 100).toFixed(2) : '0.00';
 
-            // Empaquetamos todo para enviarlo
             const payload = {
                 sampleId: state.currentSample,
                 info: s.info,
@@ -963,7 +956,7 @@ try { document.getElementById('gas-value-display').textContent = '100 %'; } catc
                 }
             })
             .catch(error => {
-                alert("Error de conexión. Verifica que configuraste Apps Script como 'Cualquier persona'.");
+                alert("Error de conexión al guardar. Verifica los permisos de Apps Script.");
                 console.error("Error:", error);
             })
             .finally(() => {
@@ -973,54 +966,46 @@ try { document.getElementById('gas-value-display').textContent = '100 %'; } catc
         });
     }
 
-
-
-    initialize();
-});
-// Ensure gas display shows 100% at start
-try { document.getElementById('gas-value-display').textContent = '100 %'; } catch(e){}
-
-    // ELEMENTOS DEL MODAL DE LA NUBE
+    // 2. Cargar lista desde la nube
     const cloudModal = document.getElementById('cloud-load-modal');
     const closeCloudModalBtn = document.getElementById('close-cloud-modal');
     const cloudLoadBody = document.getElementById('cloud-load-body');
+    const loadCloudBtn = document.getElementById('load-cloud-btn');
 
-    if (closeCloudModalBtn) {
+    if (closeCloudModalBtn && cloudModal) {
         closeCloudModalBtn.addEventListener('click', () => cloudModal.classList.remove('visible'));
     }
 
-    // CARGAR DESDE LA NUBE (Mostrar lista)
-    const loadCloudBtn = document.getElementById('load-cloud-btn');
-    if (loadCloudBtn) {
+    if (loadCloudBtn && cloudModal && cloudLoadBody) {
         loadCloudBtn.addEventListener('click', () => {
             cloudModal.classList.add('visible');
-            cloudLoadBody.innerHTML = '<p>Conectando con Google Sheets para obtener los tuestes guardados...</p>';
+            cloudLoadBody.innerHTML = '<p>Consultando base de datos en Google Sheets...</p>';
 
             fetch(URL_APPS_SCRIPT + "?action=list", { method: 'GET' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === "éxito") {
-                    if (data.list.length === 0) {
-                        cloudLoadBody.innerHTML = '<p>No hay tuestes guardados en la nube aún.</p>';
+                    if (!data.list || data.list.length === 0) {
+                        cloudLoadBody.innerHTML = '<p>No hay tuestes registrados aún en la nube.</p>';
                         return;
                     }
 
-                    let tableHTML = '<table class="report-table" style="width: 100%;">';
-                    tableHTML += '<thead><tr><th>Fecha</th><th>Muestra</th><th>Productor</th><th>Variedad</th><th>Acción</th></tr></thead><tbody>';
+                    let tableHTML = '<table class="report-table" style="width: 100%; border-collapse: collapse;">';
+                    tableHTML += '<thead><tr><th>Fila</th><th>Fecha</th><th>Muestra</th><th>Productor</th><th>Variedad</th><th>Acción</th></tr></thead><tbody>';
                     
                     data.list.forEach(item => {
                         tableHTML += `<tr>
-                            <td style="text-align:center;">${item.date}</td>
-                            <td style="text-align:center;"><b>${item.sampleId}</b></td>
-                            <td style="text-align:center;">${item.producer || '-'}</td>
-                            <td style="text-align:center;">${item.variety || '-'}</td>
-                            <td style="text-align:center;"><button class="load-specific-row-btn" data-row="${item.row}" style="background-color: var(--color-a); color: white; padding: 6px 12px; cursor: pointer; border-radius: 4px; border:none;">Descargar Perfil</button></td>
+                            <td style="text-align:center; padding: 6px;">${item.row}</td>
+                            <td style="text-align:center; padding: 6px;">${item.date}</td>
+                            <td style="text-align:center; padding: 6px;"><b>${item.sampleId}</b></td>
+                            <td style="text-align:center; padding: 6px;">${item.producer || '-'}</td>
+                            <td style="text-align:center; padding: 6px;">${item.variety || '-'}</td>
+                            <td style="text-align:center; padding: 6px;"><button class="load-specific-row-btn" data-row="${item.row}" style="background-color: var(--color-a); color: white; padding: 5px 12px; cursor: pointer; border-radius: 4px; border:none; font-weight: bold;">Cargar en Muestra ${state.currentSample}</button></td>
                         </tr>`;
                     });
                     tableHTML += '</tbody></table>';
                     cloudLoadBody.innerHTML = tableHTML;
 
-                    // Asignar eventos a los botones de descarga
                     document.querySelectorAll('.load-specific-row-btn').forEach(btn => {
                         btn.addEventListener('click', (e) => {
                             const rowToLoad = e.target.getAttribute('data-row');
@@ -1033,16 +1018,16 @@ try { document.getElementById('gas-value-display').textContent = '100 %'; } catc
                 }
             })
             .catch(error => {
-                cloudLoadBody.innerHTML = `<p style="color:red;">Error de conexión. Verifica la URL y los permisos en Apps Script.</p>`;
+                cloudLoadBody.innerHTML = `<p style="color:red;">Error de conexión. Verifica la implementación pública de Apps Script.</p>`;
                 console.error("Error:", error);
             });
         });
     }
 
     function cargarTuesteEspecifico(row) {
-        if (!confirm("Esto reemplazará la muestra actual (Muestra " + state.currentSample + ") con el tueste seleccionado. ¿Deseas continuar?")) return;
+        if (!confirm("Esto reemplazará los datos de la Muestra actual (" + state.currentSample + ") con el tueste seleccionado. ¿Deseas continuar?")) return;
         
-        cloudLoadBody.innerHTML = '<p>Descargando perfil de tueste y graficando la curva...</p>';
+        cloudLoadBody.innerHTML = '<p>Descargando perfil del tueste y graficando curva...</p>';
 
         fetch(URL_APPS_SCRIPT + "?action=load&row=" + row, { method: 'GET' })
         .then(response => response.json())
@@ -1058,18 +1043,22 @@ try { document.getElementById('gas-value-display').textContent = '100 %'; } catc
                     updateUI();
                     restoreInfoInputs(state.currentSample);
                     cloudModal.classList.remove('visible');
-                    alert("¡Tueste cargado con éxito en la Muestra " + state.currentSample + "!");
+                    alert("¡Tueste cargado exitosamente en la Muestra " + state.currentSample + "!");
                 } catch(e) {
-                    cloudLoadBody.innerHTML = `<p style="color:red;">Error al procesar el archivo JSON guardado en esa fila.</p>`;
+                    cloudLoadBody.innerHTML = `<p style="color:red;">Error al procesar el perfil guardado.</p>`;
                     console.error(e);
                 }
             } else {
-                cloudLoadBody.innerHTML = `<p style="color:red;">Error al cargar: ${data.mensaje}</p>`;
+                cloudLoadBody.innerHTML = `<p style="color:red;">Error: ${data.mensaje}</p>`;
             }
         })
         .catch(error => {
-            cloudLoadBody.innerHTML = `<p style="color:red;">Error de conexión al intentar descargar.</p>`;
+            cloudLoadBody.innerHTML = `<p style="color:red;">Error de conexión al descargar el perfil.</p>`;
             console.error("Error:", error);
         });
     }
-    // --- FIN DEL NUEVO CÓDIGO ---
+
+    initialize();
+});
+// Ensure gas display shows 100% at start
+try { document.getElementById('gas-value-display').textContent = '100 %'; } catch(e){}
