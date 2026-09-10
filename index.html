@@ -23,7 +23,7 @@
                     <button id="save-session-btn" class="session-button">Guardar Sesión</button>
                     <button id="open-session-btn" class="session-button">Abrir Sesión</button>
                     <button id="save-cloud-btn" class="session-button" style="background-color: #28a745;">Guardar en la Nube</button>
-                    <button id="save-cloud-btn" class="session-button" style="background-color: #28a745;">Guardar en la Nube</button>
+                    <button id="load-cloud-btn" class="session-button" style="background-color: #17a2b8;">Cargar de la Nube</button>
                     <button id="open-report-choices-btn" class="report-button">Generar Informe</button>
                     <button id="global-reset-btn" class="global-reset-button">Limpiar Sesión</button>
                 </div>
@@ -149,6 +149,19 @@
                         <p class="aviso aviso-info">El análisis del asistente aparecerá aquí.</p>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <div id="cloud-load-modal" class="modal-overlay">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2>Cargar Tueste desde Google Sheets</h2>
+                <button id="close-cloud-modal" class="close-button">&times;</button>
+            </div>
+            <div id="cloud-load-body" class="modal-body">
+                <p>Cargando lista de tuestes...</p>
             </div>
         </div>
     </div>
