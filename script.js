@@ -912,8 +912,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatTime(s) { return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`; }
     function parseTimeToSeconds(timeStr) { const p = timeStr.match(/^(\d+):(\d{2})$/); return p ? parseInt(p[1], 10)*60 + parseInt(p[2], 10) : null; }
     
+    initialize();
+});
+// Ensure gas display shows 100% at start
+try { document.getElementById('gas-value-display').textContent = '100 %'; } catch(e){}
 
-    // --- NUEVO CÓDIGO: GUARDAR EN GOOGLE SHEETS ---
+    // --- NUEVO CÓDIGO: GUARDAR Y CARGAR DESDE GOOGLE SHEETS ---
+    const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbxWy3FIVcqhV4-yfS2EPCXgV-T_XSBnVFt3GCmO1hJfjTQh9macTesB7aomkR3EE227JQ/exec";
+
+    // GUARDAR EN LA NUBE
     const saveCloudBtn = document.getElementById('save-cloud-btn');
     if (saveCloudBtn) {
         saveCloudBtn.addEventListener('click', () => {
@@ -938,13 +945,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 rawSample: s
             };
 
-            // Cambiar el texto del botón mientras carga
             const textoOriginal = saveCloudBtn.textContent;
             saveCloudBtn.textContent = "Guardando...";
             saveCloudBtn.disabled = true;
-
-            // Reemplaza esta URL por la que copiaste de Apps Script
-            const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbxWy3FIVcqhV4-yfS2EPCXgV-T_XSBnVFt3GCmO1hJfjTQh9macTesB7aomkR3EE227JQ/exec";
 
             fetch(URL_APPS_SCRIPT, {
                 method: 'POST',
@@ -960,7 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             })
             .catch(error => {
-                alert("Error de conexión. Verifica tu internet o la URL.");
+                alert("Error de conexión. Verifica que configuraste Apps Script como 'Cualquier persona'.");
                 console.error("Error:", error);
             })
             .finally(() => {
@@ -969,9 +972,104 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
-    // --- FIN DEL NUEVO CÓDIGO ---
+
+
 
     initialize();
 });
 // Ensure gas display shows 100% at start
 try { document.getElementById('gas-value-display').textContent = '100 %'; } catch(e){}
+
+    // ELEMENTOS DEL MODAL DE LA NUBE
+    const cloudModal = document.getElementById('cloud-load-modal');
+    const closeCloudModalBtn = document.getElementById('close-cloud-modal');
+    const cloudLoadBody = document.getElementById('cloud-load-body');
+
+    if (closeCloudModalBtn) {
+        closeCloudModalBtn.addEventListener('click', () => cloudModal.classList.remove('visible'));
+    }
+
+    // CARGAR DESDE LA NUBE (Mostrar lista)
+    const loadCloudBtn = document.getElementById('load-cloud-btn');
+    if (loadCloudBtn) {
+        loadCloudBtn.addEventListener('click', () => {
+            cloudModal.classList.add('visible');
+            cloudLoadBody.innerHTML = '<p>Conectando con Google Sheets para obtener los tuestes guardados...</p>';
+
+            fetch(URL_APPS_SCRIPT + "?action=list", { method: 'GET' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "éxito") {
+                    if (data.list.length === 0) {
+                        cloudLoadBody.innerHTML = '<p>No hay tuestes guardados en la nube aún.</p>';
+                        return;
+                    }
+
+                    let tableHTML = '<table class="report-table" style="width: 100%;">';
+                    tableHTML += '<thead><tr><th>Fecha</th><th>Muestra</th><th>Productor</th><th>Variedad</th><th>Acción</th></tr></thead><tbody>';
+                    
+                    data.list.forEach(item => {
+                        tableHTML += `<tr>
+                            <td style="text-align:center;">${item.date}</td>
+                            <td style="text-align:center;"><b>${item.sampleId}</b></td>
+                            <td style="text-align:center;">${item.producer || '-'}</td>
+                            <td style="text-align:center;">${item.variety || '-'}</td>
+                            <td style="text-align:center;"><button class="load-specific-row-btn" data-row="${item.row}" style="background-color: var(--color-a); color: white; padding: 6px 12px; cursor: pointer; border-radius: 4px; border:none;">Descargar Perfil</button></td>
+                        </tr>`;
+                    });
+                    tableHTML += '</tbody></table>';
+                    cloudLoadBody.innerHTML = tableHTML;
+
+                    // Asignar eventos a los botones de descarga
+                    document.querySelectorAll('.load-specific-row-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            const rowToLoad = e.target.getAttribute('data-row');
+                            cargarTuesteEspecifico(rowToLoad);
+                        });
+                    });
+
+                } else {
+                    cloudLoadBody.innerHTML = `<p style="color:red;">Error: ${data.mensaje}</p>`;
+                }
+            })
+            .catch(error => {
+                cloudLoadBody.innerHTML = `<p style="color:red;">Error de conexión. Verifica la URL y los permisos en Apps Script.</p>`;
+                console.error("Error:", error);
+            });
+        });
+    }
+
+    function cargarTuesteEspecifico(row) {
+        if (!confirm("Esto reemplazará la muestra actual (Muestra " + state.currentSample + ") con el tueste seleccionado. ¿Deseas continuar?")) return;
+        
+        cloudLoadBody.innerHTML = '<p>Descargando perfil de tueste y graficando la curva...</p>';
+
+        fetch(URL_APPS_SCRIPT + "?action=load&row=" + row, { method: 'GET' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "éxito") {
+                try {
+                    const importedProfile = JSON.parse(data.data);
+                    const s = state.samples[state.currentSample];
+                    Object.assign(s, createEmptySample());
+                    Object.assign(s, importedProfile);
+                    s.asistenteAvisos = s.asistenteAvisos || [];
+                    s.adjustments = s.adjustments || [];
+                    updateUI();
+                    restoreInfoInputs(state.currentSample);
+                    cloudModal.classList.remove('visible');
+                    alert("¡Tueste cargado con éxito en la Muestra " + state.currentSample + "!");
+                } catch(e) {
+                    cloudLoadBody.innerHTML = `<p style="color:red;">Error al procesar el archivo JSON guardado en esa fila.</p>`;
+                    console.error(e);
+                }
+            } else {
+                cloudLoadBody.innerHTML = `<p style="color:red;">Error al cargar: ${data.mensaje}</p>`;
+            }
+        })
+        .catch(error => {
+            cloudLoadBody.innerHTML = `<p style="color:red;">Error de conexión al intentar descargar.</p>`;
+            console.error("Error:", error);
+        });
+    }
+    // --- FIN DEL NUEVO CÓDIGO ---
